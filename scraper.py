@@ -78,7 +78,7 @@ class LevelsFYI:
         Returns:
             Optional[Dict[str, str]]: A dictionary containing salary data if found, None otherwise.
         """
-        if not soup:
+        if soup is None:
             return None
 
         xpaths = {
@@ -95,6 +95,45 @@ class LevelsFYI:
             result[key] = element[0].text.strip() if element else "Unavailable"
 
         return result if any(value != "Unavailable" for value in result.values()) else None
+    def paragraphise(self, data):
+        """
+        Convert the scraped salary data into a formatted paragraph for easy understanding by an LLM.
+
+        Args:
+            data (Dict[str, Any]): The dictionary returned by the scrape method.
+
+        Returns:
+            str: A formatted paragraph describing the salary data.
+        """
+        if data['status'] == 'error':
+            return f"An error occurred while fetching salary data: {data['errors'][0]}"
+
+        overall = data['data']['overall']['data']
+        entry_level = data['data']['entry_level']['data']
+        senior = data['data']['senior']['data']
+
+        paragraph = f"For {overall['job_title']} positions, the salary information is as follows:\n\n"
+        paragraph += f"Overall, the median salary is {overall['median']}. "
+        paragraph += f"The 25th percentile salary is {overall['25th_percentile']}, "
+        paragraph += f"the 75th percentile is {overall['75th_percentile']}, "
+        paragraph += f"and the 90th percentile reaches {overall['90th_percentile']}.\n\n"
+
+        paragraph += f"For entry-level positions, the median salary is {entry_level['median']}. "
+        paragraph += f"The range spans from {entry_level['25th_percentile']} at the 25th percentile "
+        paragraph += f"to {entry_level['75th_percentile']} at the 75th percentile, "
+        paragraph += f"with top earners (90th percentile) making {entry_level['90th_percentile']}.\n\n"
+
+        paragraph += f"Senior-level {overall['job_title']}s can expect a median salary of {senior['median']}. "
+        paragraph += f"The salary range for experienced professionals starts at {senior['25th_percentile']} (25th percentile), "
+        paragraph += f"goes up to {senior['75th_percentile']} (75th percentile), "
+        paragraph += f"with top earners (90th percentile) commanding {senior['90th_percentile']}."
+
+        return paragraph
+
+class RateMyApprenticeship:
+    def __init__(self):
+     pass    
+
 
 # Example usage
 if __name__ == "__main__":
