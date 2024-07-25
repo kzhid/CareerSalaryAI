@@ -1,102 +1,103 @@
 import requests
 from bs4 import BeautifulSoup
 import json
+from lxml import etree
+from typing import Dict, Any, List, Optional
 
 class LevelsFYI:
-    def __init__(self):
-        pass
+    def scrape(self, location: str, jobtitle: str) -> Dict[str, Any]:
+        """
+        Scrape salary data for a given job title and location.
 
-    def scrape(self, location, jobtitle):
+        Args:
+            location (str): The location to search for.
+            jobtitle (str): The job title to search for.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the scraped data and any error messages.
+        """
+        urls = self._generate_urls(location, jobtitle)
+        results = [self._scrape_url(url) for url in urls]
+        
+        return {
+            'status': 'success' if any(result['status'] == 'success' for result in results) else 'error',
+            'data': {
+                'overall': results[0],
+                'entry_level': results[1],
+                'senior': results[2]
+            },
+            'errors': [result['error'] for result in results if result['status'] == 'error']
+        }
+
+    def _generate_urls(self, location: str, jobtitle: str) -> List[str]:
+        base_url = "https://www.levels.fyi/t"
+        formatted_jobtitle = jobtitle.replace(" ", "-").lower()
+        formatted_location = location.replace(" ", "-").lower()
+        return [
+            f"{base_url}/{formatted_jobtitle}/locations/{formatted_location}",
+            f"{base_url}/{formatted_jobtitle}/levels/entry-level/locations/{formatted_location}",
+            f"{base_url}/{formatted_jobtitle}/levels/senior/locations/{formatted_location}"
+        ]
+
+    def _scrape_url(self, url: str) -> Dict[str, Any]:
+        print(f"Scraping {url}")
+        try:
+            response = self._make_request(url)
+            parsed_html = self._parse_html(response.text)
+            salary_data = self.extract_salary_data(parsed_html)
+            if salary_data:
+                return {'status': 'success', 'data': salary_data}
+            else:
+                return {'status': 'error', 'error': 'No salary data found', 'data': None}
+        except requests.RequestException as e:
+            return {'status': 'error', 'error': f"Request error: {str(e)}", 'data': None}
+        except Exception as e:
+            return {'status': 'error', 'error': f"Unexpected error: {str(e)}", 'data': None}
+
+    def _make_request(self, url: str) -> requests.Response:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
         }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response
 
-        base_url = "https://www.levels.fyi/t"
-        formatted_jobtitle = jobtitle.replace(" ", "-").lower()
-        formatted_location = location.replace(" ", "-").lower()
+    def _parse_html(self, html: str) -> Optional[etree._Element]:
+        return etree.HTML(html) if html else None
 
-        urls = [
-            f"{base_url}/{formatted_jobtitle}/locations/{formatted_location}",
-            f"{base_url}/{formatted_jobtitle}/levels/entry-level/locations/{formatted_location}",
-            f"{base_url}/{formatted_jobtitle}/levels/senior/locations/{formatted_location}"
-        ]
-
-        results = []
-        for url in urls:
-            print(f"Scraping {url}")
-            try:
-                response = requests.get(url, headers=headers)
-                response.raise_for_status()
-                parsed_html = self._parse_html(response.text)
-                salary_data = self.extract_salary_data(parsed_html)
-                results.append(salary_data)
-            except requests.RequestException as e:
-                print(f"An error occurred while fetching the URL: {e}")
-                results.append(None)
-
-        return {
-            'overall': results[0],
-            'entry_level': results[1],
-            'senior': results[2]
-        }
-
-    def _parse_html(self, html):
-        if html:
-            return BeautifulSoup(html, 'html.parser')
-        return None
- 
-    def extract_salary_data(self, soup):
+    def extract_salary_data(self, soup: Optional[etree._Element]) -> Optional[Dict[str, str]]:
         """
         Extracts the median, 25th percentile, 75th percentile, and 90th percentile salaries from the parsed HTML.
 
-        Returns:
-            dict: A dictionary containing 'median', '25th_percentile', '75th_percentile', '90th_percentile', and 'job_title' if found, None otherwise.
-        """
-        median_selector = "#__next > div > div.MuiContainer-root.MuiContainer-maxWidthXl.job-family-page_jobFamilyContainer__fV2kV.css-yp9our > div.MuiGrid-root.MuiGrid-container.locationSlug_percentileCardContainer__lMgf9.css-1d3bbye > div > article > div > div.percentiles_statsAndSelector__tGhxk > div.percentiles_median__ZQVGl > h3"
-        percentile_25_selector = "#__next > div > div.MuiContainer-root.MuiContainer-maxWidthXl.job-family-page_jobFamilyContainer__fV2kV.css-yp9our > div.MuiGrid-root.MuiGrid-container.locationSlug_percentileCardContainer__lMgf9.css-1d3bbye > div > article > div > div.percentiles_statsAndSelector__tGhxk > div.percentiles_percentiles__ISt_P > div.percentiles_twentyFifth__jWb67 > h6"
-        percentile_75_selector = "#__next > div > div.MuiContainer-root.MuiContainer-maxWidthXl.job-family-page_jobFamilyContainer__fV2kV.css-yp9our > div.MuiGrid-root.MuiGrid-container.locationSlug_percentileCardContainer__lMgf9.css-1d3bbye > div > article > div > div.percentiles_statsAndSelector__tGhxk > div.percentiles_percentiles__ISt_P > div.percentiles_seventyFifth__5JM0W > h6"
-        percentile_90_selector = "#__next > div > div.MuiContainer-root.MuiContainer-maxWidthXl.job-family-page_jobFamilyContainer__fV2kV.css-yp9our > div.MuiGrid-root.MuiGrid-container.locationSlug_percentileCardContainer__lMgf9.css-1d3bbye > div > article > div > div.percentiles_statsAndSelector__tGhxk > div.percentiles_percentiles__ISt_P > div.percentiles_ninetieth__wsuGa > h6"
-        job_title_selector = "#__next > div > div.job-family-header_jobFamilyHeader__qkSDj > div > div.job-family-header_headerContent__hQkdm > h1"
-        
-        median_element = soup.select_one(median_selector)
-        percentile_25_element = soup.select_one(percentile_25_selector)
-        percentile_75_element = soup.select_one(percentile_75_selector)
-        percentile_90_element = soup.select_one(percentile_90_selector)
-        job_title_element = soup.select_one(job_title_selector)
-        
-        result = {}
-        
-        if median_element:
-            result['median'] = median_element.text.strip()
-        else:
-            result['median'] = "Unavailable"
-        
-        if percentile_25_element:
-            result['25th_percentile'] = percentile_25_element.text.strip()
-        else:
-            result['25th_percentile'] = "Unavailable"
-        
-        if percentile_75_element:
-            result['75th_percentile'] = percentile_75_element.text.strip()
-        else:
-            result['75th_percentile'] = "Unavailable"
-        
-        if percentile_90_element:
-            result['90th_percentile'] = percentile_90_element.text.strip()
-        else:
-            result['90th_percentile'] = "Unavailable"
-        
-        if job_title_element:
-            result['job_title'] = job_title_element.text.strip()
-        else:
-            result['job_title'] = "Unavailable"
-        
-        return result if result else None
-    
-scraper = LevelsFYI()
-x = scraper.scrape("london metro area", "data scientist")
+        Args:
+            soup (Optional[etree._Element]): The parsed HTML.
 
-print(json.dumps(x, indent=4, sort_keys=True, ensure_ascii=False))
+        Returns:
+            Optional[Dict[str, str]]: A dictionary containing salary data if found, None otherwise.
+        """
+        if not soup:
+            return None
+
+        xpaths = {
+            'median': '//*[@id="__next"]/div/div[2]/div[1]/div/article/div/div[1]/div[1]/h3',
+            '25th_percentile': '//*[@id="__next"]/div/div[2]/div[1]/div/article/div/div[1]/div[2]/div[1]/h6',
+            '75th_percentile': '//*[@id="__next"]/div/div[2]/div[1]/div/article/div/div[1]/div[2]/div[2]/h6',
+            '90th_percentile': '//*[@id="__next"]/div/div[2]/div[1]/div/article/div/div[1]/div[2]/div[3]/h6',
+            'job_title': '//*[@id="__next"]/div/div[1]/div/div[2]/h1'
+        }
+
+        result = {}
+        for key, xpath in xpaths.items():
+            element = soup.xpath(xpath)
+            result[key] = element[0].text.strip() if element else "Unavailable"
+
+        return result if any(value != "Unavailable" for value in result.values()) else None
+
+# Example usage
+if __name__ == "__main__":
+    scraper = LevelsFYI()
+    result = scraper.scrape("london metro area", "data scientist")
+    print(json.dumps(result, indent=4, sort_keys=True, ensure_ascii=False))
