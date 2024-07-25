@@ -1,7 +1,7 @@
 import os
-from llama_index import VectorStoreIndex, SimpleDirectoryReader
-from llama_index.llms import Ollama
-from llama_index.agent import ReActAgent
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.llms.ollama import Ollama
+from llama_index.core.agent import ReActAgent
 
 # Initialize Ollama with the Llama 3 model
 llm = Ollama(model="llama3")
